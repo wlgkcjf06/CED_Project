@@ -2,7 +2,7 @@
 
 ## Milestone 1: LFS & Bluetooth & 암막 정지
 * Until 25th, November 2025 (Tue)
-* Nov. 18 : LFS Test
+* Nov. 18 : LFS Test TODO: 새 배터리 사오기, 암-암 점퍼케이블 가져오기
 
 ## Milestone 2: 게임판 탐지
 * Until 2nd, December 2025 (Tue)
