@@ -4,7 +4,7 @@
 * Until 25th, November 2025 (Tue)
 * Nov. 18 : LFS Test
 * Nov. 20 : LFS, Bluetooth, 암막정지 테스트
-* TODO:
+* TODO: 양면테이프 가져오기
 
 ## Milestone 2: 게임판 탐지
 * Until 2nd, December 2025 (Tue)
