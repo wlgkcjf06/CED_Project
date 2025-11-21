@@ -12,4 +12,5 @@
   
 ## Milestone 3: 틱택토 최선의 수 도출
 * Until 4th, December 2025 (Thu)
-* TODO: C 파일로 틱택토 최선의 수 도출 프로그램 만들기
+* Nov. 22 : TicTacToe Algorithm 구현. 앞으로 테스트 케이스들을 분석해가며 수정해나가기.
+* TODO: 해당 C++ 파일을 테스트 케이스 분석을 통해 필요하면 수정. 이후 Project guideline(탐지와 Bluetooth)에 따라 입력 받는 부분을 수정하여 Arduino로 최종 구현.
