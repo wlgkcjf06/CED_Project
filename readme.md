@@ -4,7 +4,7 @@
 * Until 25th, November 2025 (Tue)
 * Nov. 18 : LFS Test
 * Nov. 20 : LFS 테스트 실패, Bluetooth, 암막정지 테스트 성공
-* TODO: 회전 내측 모터 정지 현상 해결, 절연테이프+9V 배터리 가져오기, 블루투스 모듈과 모터드라이브 교체?
+* TODO: 회전 내측 모터 정지 현상 해결, 절연테이프+9V 배터리 가져오기, 블루투스 모듈과 모터드라이브 교체?, 너트와 볼트 요청
 
 ## Milestone 2: 게임판 탐지
 * Until 2nd, December 2025 (Tue)
