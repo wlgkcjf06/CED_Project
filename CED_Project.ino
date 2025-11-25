@@ -16,6 +16,7 @@ int car_phase = 1;
 bool car_stop = false;
 String command = "";
 byte buffer[10];
+bool board[9] = {false};
 
 #define LIGHT_SENSOR A3
 #define LT_MODULE_L A2
@@ -28,6 +29,11 @@ byte buffer[10];
 #define EN2 3
 #define EN3 4
 #define EN4 2
+#define LED 1
+#define TRIG_L 10
+#define ECHO_L 11
+#define TRIG_R 12
+#define ECHO_R 13
 
 SoftwareSerial bt_serial (8,9);
 
@@ -39,6 +45,12 @@ void setup() {
   pinMode(EN2, OUTPUT);
   pinMode(EN3, OUTPUT);
   pinMode(EN4, OUTPUT);
+
+  pinMode(LED, OUTPUT);
+  pinMode(TRIG_L, OUTPUT);
+  pinMode(TRIG_R, OUTPUT);
+  pinMode(ECHO_L, INPUT);
+  pinMode(ECHO_R, INPUT);
 
   pinMode(LT_MODULE_L, INPUT);
   pinMode(LT_MODULE_F, INPUT);
@@ -76,10 +88,51 @@ bool It_isDark() {
   return(lum > LIGHT_THRESHOLD) ? (true) : (false);
 }
 
-void Update_Phase1() {
+long Measure_Distance(int Trig, int Echo) {
+  long duration;
+  digitalWrite(Trig, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(Trig, LOW);
+
+  duration = pulseIn(Echo, HIGH);
+  return duration / 29 / 2;
+}
+
+void LFS() {
   bool ll = It_isLeft();
   bool ff = It_isFront();
   bool rr = It_isRight();
+  if (ll) {
+    g_direction = CAR_DIR_LF;
+  }
+  else if (ff & !rr) {
+    g_direction = CAR_DIR_FW;
+  }
+  else if (rr) {
+    g_direction = CAR_DIR_RF;
+  }
+  else if (!ll & !ff & !rr) {
+    g_direction = CAR_DIR_TA;
+  }
+}
+
+
+int Detect_Line() {
+  bool ll = It_isLeft();
+  bool ff = It_isFront();
+  bool rr = It_isRight();
+  if(ll & ff & rr) {
+    return 1;
+  }
+  else if (!ll & !ff & !rr) {
+    return 2;
+  }
+  else {
+    return 0;
+  }
+}
+
+void Update_Phase1() {
   bool dar = It_isDark();
   if (bt_serial.available()) {
     char data = (char) bt_serial.read();
@@ -91,10 +144,12 @@ void Update_Phase1() {
       if (command.equals("stop")) {
         car_stop = true;
         Serial.println("Car Stopped");
+        digitalWrite(LED, HIGH);
       }
       if (command.equals("start")) {
         car_stop = false;
         Serial.println("Car Restarted");
+        digitalWrite(LED, LOW);
         //car_phase +=1;
       }
       command = "";
@@ -107,17 +162,21 @@ void Update_Phase1() {
   else if (dar) {
     g_direction = CAR_DIR_ST;
   }
-  else if (ll) {
-    g_direction = CAR_DIR_LF;
+  else {
+    LFS();
   }
-  else if (ff & !rr) {
-    g_direction = CAR_DIR_FW;
-  }
-  else if (rr) {
-    g_direction = CAR_DIR_RF;
-  }
-  else if (!ll & !ff & !rr) {
+}
+
+void Update_Phase2() {
+  long dist_l, dist_r;
+  int line_state = Detect_Line();
+  dist_l = Measure_Distance(TRIG_L, ECHO_L);
+  dist_r = Measure_Distance(TRIG_R, ECHO_R);
+  if(line_state == 2) {
     g_direction = CAR_DIR_TA;
+  }
+  else{
+    g_direction = CAR_DIR_FW;
   }
 }
 
@@ -178,4 +237,8 @@ void loop() {
   if (car_phase == 1){
     Update_Phase1();
   }
+  else if (car_phase == 2) {
+    Update_Phase2();
+  }
+  Serial.println(g_direction);
 }
