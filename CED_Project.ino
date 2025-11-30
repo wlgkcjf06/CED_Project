@@ -1,26 +1,6 @@
 #include <LiquidCrystal_I2C.h>
 #include <SoftwareSerial.h>
 
-#define CAR_DIR_RF 1
-#define CAR_DIR_ST 2
-#define CAR_DIR_LF 3
-#define CAR_DIR_FW 4
-#define CAR_DIR_TA 5
-#define TURN_DELAY 4000
-#define BLACK_THRESHOLD 150
-#define LIGHT_THRESHOLD 300
-
-int g_direction = 0;
-int speed = 100;
-int car_phase = 1;
-bool car_stop = false;
-String command = "";
-byte buffer[10];
-
-#define LIGHT_SENSOR A3
-#define LT_MODULE_L A2
-#define LT_MODULE_F A1
-#define LT_MODULE_R A0
 
 #define ENA 6
 #define ENB 5
@@ -29,10 +9,104 @@ byte buffer[10];
 #define EN3 4
 #define EN4 2
 
-SoftwareSerial bt_serial (8,9);
+#define LT_L A2
+#define LT_F A1
+#define LT_R A0
+#define LIGHT_SENSOR A3
+
+#define BLACK_TH 150
+#define DARK_TH  500   // 암막 더 안정적으로 감지
+
+#define DIR_FW 1
+#define DIR_LF 2
+#define DIR_RF 3
+#define DIR_TA 4
+#define DIR_ST 5
+
+int g_direction = DIR_ST;
+
+int BASE_SPEED = 120;
+int TURN_SPEED = 110;
+
+void go_straight() {
+  digitalWrite(EN1, LOW);
+  digitalWrite(EN2, HIGH);
+  digitalWrite(EN3, LOW);
+  digitalWrite(EN4, HIGH);
+  analogWrite(ENA, BASE_SPEED);
+  analogWrite(ENB, BASE_SPEED);
+}
+
+void turn_left() {
+  digitalWrite(EN1, LOW);
+  digitalWrite(EN2, HIGH);
+  digitalWrite(EN3, HIGH);
+  digitalWrite(EN4, LOW);
+  analogWrite(ENA, TURN_SPEED);
+  analogWrite(ENB, TURN_SPEED);
+}
+
+void turn_right() {
+  digitalWrite(EN1, HIGH);
+  digitalWrite(EN2, LOW);
+  digitalWrite(EN3, LOW);
+  digitalWrite(EN4, HIGH);
+  analogWrite(ENA, TURN_SPEED);
+  analogWrite(ENB, TURN_SPEED);
+}
+
+void u_turn() {
+  digitalWrite(EN1, HIGH);
+  digitalWrite(EN2, LOW);
+  digitalWrite(EN3, LOW);
+  digitalWrite(EN4, HIGH);
+  analogWrite(ENA, TURN_SPEED);
+  analogWrite(ENB, TURN_SPEED);
+}
+
+void stop_car() {
+  analogWrite(ENA, 0);
+  analogWrite(ENB, 0);
+}
+
+bool isLeft()   { return analogRead(LT_L) > BLACK_TH; }
+bool isFront()  { return analogRead(LT_F) > BLACK_TH; }
+bool isRight()  { return analogRead(LT_R) > BLACK_TH; }
+bool isDark()   { return analogRead(LIGHT_SENSOR) > DARK_TH; }
+
+// -----------------------------------------------------
+//  LFS decision logic (Section 1)
+//  Left → Front → Right → U-turn
+// -----------------------------------------------------
+void LFS_update() {
+  bool L = isLeft();
+  bool F = isFront();
+  bool R = isRight();
+  bool D = isDark();
+
+  if (D) {
+    g_direction = DIR_ST;
+    return;
+  }
+
+  // STRICT LFS priority
+  if (L)        g_direction = DIR_LF;
+  else if (F)   g_direction = DIR_FW;
+  else if (R)   g_direction = DIR_RF;
+  else          g_direction = DIR_TA;
+}
+
+void car_update() {
+  switch(g_direction) {
+    case DIR_FW: go_straight(); break;
+    case DIR_LF: turn_left();   break;
+    case DIR_RF: turn_right();  break;
+    case DIR_TA: u_turn();      break;
+    default:     stop_car();    break;
+  }
+}
 
 void setup() {
-  // put your setup code here, to run once:
   pinMode(ENA, OUTPUT);
   pinMode(ENB, OUTPUT);
   pinMode(EN1, OUTPUT);
@@ -40,142 +114,20 @@ void setup() {
   pinMode(EN3, OUTPUT);
   pinMode(EN4, OUTPUT);
 
-  pinMode(LT_MODULE_L, INPUT);
-  pinMode(LT_MODULE_F, INPUT);
-  pinMode(LT_MODULE_R, INPUT);
+  pinMode(LT_L, INPUT);
+  pinMode(LT_F, INPUT);
+  pinMode(LT_R, INPUT);
   pinMode(LIGHT_SENSOR, INPUT);
 
   Serial.begin(9600);
   bt_serial.begin(9600);
+  lcd.init(); 
+  lcd.backlight();
 }
 
-bool It_isLeft() {
-  int ret = analogRead(LT_MODULE_L);
-  //Serial.print("left: ");
-  //Serial.println(ret);
-  return(ret > BLACK_THRESHOLD) ? (true) : (false);
-}
-
-bool It_isFront() {
-  int ret = analogRead(LT_MODULE_F);
-  //Serial.print("front: ");
-  //Serial.println(ret);
-  return(ret > BLACK_THRESHOLD) ? (true) : (false);
-}
-
-bool It_isRight() {
-  int ret = analogRead(LT_MODULE_R);
-  //Serial.print("right: ");
-  //Serial.println(ret);
-  return(ret > BLACK_THRESHOLD) ? (true) : (false);
-}
-
-bool It_isDark() {
-  int lum = analogRead(LIGHT_SENSOR);
-  //Serial.println(lum);
-  return(lum > LIGHT_THRESHOLD) ? (true) : (false);
-}
-
-void Update_Phase1() {
-  bool ll = It_isLeft();
-  bool ff = It_isFront();
-  bool rr = It_isRight();
-  bool dar = It_isDark();
-  if (bt_serial.available()) {
-    char data = (char) bt_serial.read();
-    if (data != '\n') {
-      command += data;
-    }
-    else {
-      command.trim();
-      if (command.equals("stop")) {
-        car_stop = true;
-        Serial.println("Car Stopped");
-      }
-      if (command.equals("start")) {
-        car_stop = false;
-        Serial.println("Car Restarted");
-        //car_phase +=1;
-      }
-      command = "";
-    }
-    
-  }
-  if (car_stop) {
-    g_direction = CAR_DIR_ST;
-  }
-  else if (dar) {
-    g_direction = CAR_DIR_ST;
-  }
-  else if (ll) {
-    g_direction = CAR_DIR_LF;
-  }
-  else if (ff & !rr) {
-    g_direction = CAR_DIR_FW;
-  }
-  else if (rr) {
-    g_direction = CAR_DIR_RF;
-  }
-  else if (!ll & !ff & !rr) {
-    g_direction = CAR_DIR_TA;
-  }
-}
-
-
-void car_update() {
-  // put your main code here, to run repeatedly:
-  //Serial.print("Car Update: ");
-  //Serial.println(g_direction);
-  if(g_direction == CAR_DIR_FW){
-    digitalWrite(EN1, LOW);
-    digitalWrite(EN2, HIGH);
-    digitalWrite(EN3, LOW);
-    digitalWrite(EN4, HIGH);
-    analogWrite(ENA, speed);
-    analogWrite(ENB, speed);
-  }
-  else if (g_direction == CAR_DIR_RF) {
-    digitalWrite(EN1, HIGH);
-    digitalWrite(EN2, LOW);
-    digitalWrite(EN3, LOW);
-    digitalWrite(EN4, HIGH);
-    analogWrite(ENA, speed);
-    analogWrite(ENB, speed); 
-    delay(100);
-    analogWrite(ENA, 0);
-    analogWrite(ENB, 0);
-    delay(50);
-  }
-  else if (g_direction == CAR_DIR_LF) {
-    digitalWrite(EN1, LOW);
-    digitalWrite(EN2, HIGH);
-    digitalWrite(EN3, HIGH);
-    digitalWrite(EN4, LOW);
-    analogWrite(ENA, speed);
-    analogWrite(ENB, speed);
-    delay(100);
-    analogWrite(ENA, 0);
-    analogWrite(ENB, 0);
-    delay(50);
-  }
-  else if (g_direction == CAR_DIR_TA) {
-    digitalWrite(EN1, HIGH);
-    digitalWrite(EN2, LOW);
-    digitalWrite(EN3, LOW);
-    digitalWrite(EN4, HIGH);
-    analogWrite(ENA, speed);
-    analogWrite(ENB, speed);
-    delay(TURN_DELAY);
-  }
-  else{
-    analogWrite(ENA, 0);
-    analogWrite(ENB, 0);
-  }
-}
-
+//  Loop (Sense → Decide → Act)
+// -----------------------------------------------------
 void loop() {
+  LFS_update();
   car_update();
-  if (car_phase == 1){
-    Update_Phase1();
-  }
 }
