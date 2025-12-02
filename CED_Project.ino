@@ -134,28 +134,28 @@ void car_update() {
     analogWrite(ENB, speed);
   }
   else if (g_direction == CAR_DIR_RF) {
-    digitalWrite(EN1, HIGH);
-    digitalWrite(EN2, LOW);
-    digitalWrite(EN3, LOW);
-    digitalWrite(EN4, HIGH);
-    analogWrite(ENA, speed);
-    analogWrite(ENB, speed); 
-    delay(100);
-    analogWrite(ENA, 0);
-    analogWrite(ENB, 0);
-    delay(50);
+    bool ff = It_isFront();
+    while(!ff){
+      digitalWrite(EN1, HIGH);
+      digitalWrite(EN2, LOW);
+      digitalWrite(EN3, LOW);
+      digitalWrite(EN4, HIGH);
+      analogWrite(ENA, speed);
+      analogWrite(ENB, speed);
+      ff = It_isFront();
+    }
   }
   else if (g_direction == CAR_DIR_LF) {
-    digitalWrite(EN1, LOW);
-    digitalWrite(EN2, HIGH);
-    digitalWrite(EN3, HIGH);
-    digitalWrite(EN4, LOW);
-    analogWrite(ENA, speed);
-    analogWrite(ENB, speed);
-    delay(100);
-    analogWrite(ENA, 0);
-    analogWrite(ENB, 0);
-    delay(50);
+    bool ff = It_isFront();
+    while(!ff){
+      digitalWrite(EN1, LOW);
+      digitalWrite(EN2, HIGH);
+      digitalWrite(EN3, HIGH);
+      digitalWrite(EN4, LOW);
+      analogWrite(ENA, speed);
+      analogWrite(ENB, speed);
+      ff = It_isFront();
+    }
   }
   else if (g_direction == CAR_DIR_TA) {
     bool ff = It_isFront();
