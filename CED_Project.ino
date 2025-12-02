@@ -6,12 +6,11 @@
 #define CAR_DIR_LF 3
 #define CAR_DIR_FW 4
 #define CAR_DIR_TA 5
-#define TURN_DELAY 4000
 #define BLACK_THRESHOLD 150
 #define LIGHT_THRESHOLD 300
 
 int g_direction = 0;
-int speed = 100;
+int speed = 200;
 int car_phase = 1;
 bool car_stop = false;
 String command = "";
@@ -51,22 +50,22 @@ void setup() {
 
 bool It_isLeft() {
   int ret = analogRead(LT_MODULE_L);
-  //Serial.print("left: ");
-  //Serial.println(ret);
+  Serial.print("left: ");
+  Serial.println(ret);
   return(ret > BLACK_THRESHOLD) ? (true) : (false);
 }
 
 bool It_isFront() {
   int ret = analogRead(LT_MODULE_F);
-  //Serial.print("front: ");
-  //Serial.println(ret);
+  Serial.print("front: ");
+  Serial.println(ret);
   return(ret > BLACK_THRESHOLD) ? (true) : (false);
 }
 
 bool It_isRight() {
   int ret = analogRead(LT_MODULE_R);
-  //Serial.print("right: ");
-  //Serial.println(ret);
+  Serial.print("right: ");
+  Serial.println(ret);
   return(ret > BLACK_THRESHOLD) ? (true) : (false);
 }
 
@@ -159,13 +158,16 @@ void car_update() {
     delay(50);
   }
   else if (g_direction == CAR_DIR_TA) {
-    digitalWrite(EN1, HIGH);
-    digitalWrite(EN2, LOW);
-    digitalWrite(EN3, LOW);
-    digitalWrite(EN4, HIGH);
-    analogWrite(ENA, speed);
-    analogWrite(ENB, speed);
-    delay(TURN_DELAY);
+    bool ff = It_isFront();
+    while(!ff){
+      digitalWrite(EN1, LOW);
+      digitalWrite(EN2, HIGH);
+      digitalWrite(EN3, HIGH);
+      digitalWrite(EN4, LOW);
+      analogWrite(ENA, speed);
+      analogWrite(ENB, speed);
+      ff = It_isFront();
+    }    
   }
   else{
     analogWrite(ENA, 0);
