@@ -6,6 +6,7 @@
 #define CAR_DIR_LF 3
 #define CAR_DIR_FW 4
 #define CAR_DIR_TA 5
+#define TURN_DELAY 100
 #define BLACK_THRESHOLD 150
 #define LIGHT_THRESHOLD 300
 
@@ -109,7 +110,7 @@ void Update_Phase1() {
   else if (ll) {
     g_direction = CAR_DIR_LF;
   }
-  else if (ff & !rr) {
+  else if (ff) {
     g_direction = CAR_DIR_FW;
   }
   else if (rr) {
@@ -134,6 +135,13 @@ void car_update() {
     analogWrite(ENB, speed);
   }
   else if (g_direction == CAR_DIR_RF) {
+    digitalWrite(EN1, HIGH);
+    digitalWrite(EN2, LOW);
+    digitalWrite(EN3, LOW);
+    digitalWrite(EN4, HIGH);
+    analogWrite(ENA, speed);
+    analogWrite(ENB, speed);
+    delay(TURN_DELAY);
     bool ff = It_isFront();
     while(!ff){
       digitalWrite(EN1, HIGH);
@@ -146,7 +154,16 @@ void car_update() {
     }
   }
   else if (g_direction == CAR_DIR_LF) {
+    digitalWrite(EN1, LOW);
+    digitalWrite(EN2, HIGH);
+    digitalWrite(EN3, HIGH);
+    digitalWrite(EN4, LOW);
+    analogWrite(ENA, speed);
+    analogWrite(ENB, speed);
+    delay(TURN_DELAY);
     bool ff = It_isFront();
+    bool ll = It_isLeft();
+    bool rr = It_isRight();
     while(!ff){
       digitalWrite(EN1, LOW);
       digitalWrite(EN2, HIGH);
@@ -155,6 +172,11 @@ void car_update() {
       analogWrite(ENA, speed);
       analogWrite(ENB, speed);
       ff = It_isFront();
+      ll = It_isLeft();
+      rr = It_isRight();
+      if (ll || rr) {
+        break;
+      }
     }
   }
   else if (g_direction == CAR_DIR_TA) {
