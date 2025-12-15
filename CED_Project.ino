@@ -159,7 +159,7 @@ void Update_Phase1() {
         car_stop = false;
         Serial.println("Car Restarted");
         digitalWrite(LED, LOW);
-        //car_phase +=1;
+        car_phase +=1;
       }
       command = "";
     }
@@ -335,7 +335,24 @@ void car_update() {
 
 void loop() {
   car_update();
-  if (car_phase == 1){
-    Update_Phase1();
+  switch(car_phase){
+    case 1:
+      Update_Phase1();
+      break;
+    case 2:
+      Update_Phase2();
+      break;
+    case 3:
+      Update_Phase3();
+      break;
+    case 4:
+      Update_Phase4();
+      break;
+    case 5:
+      //Insert Tic-Tac-Toe Code Here
+      break;
+    default:
+      g_direction = CAR_DIR_ST;
+      break;
   }
 }
