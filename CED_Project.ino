@@ -149,20 +149,6 @@ int Detect_Course() {
   }
 }
 
-void Update_Phase1() {
-  bool ll = It_isLeft();
-  bool ff = It_isFront();
-  bool rr = It_isRight();
-  if(ll & ff & rr) {
-    return 1;
-  }
-  else if (!ll & !ff & !rr) {
-    return 2;
-  }
-  else {
-    return 0;
-  }
-}
 
 void Update_Phase1() {
   bool dar = It_isDark();
