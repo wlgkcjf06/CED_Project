@@ -101,7 +101,7 @@ bool Is_LeftClose() {
   delayMicroseconds(10);
   digitalWrite(TRIG_L, LOW);
 
-  duration = pulseIn(ECHO_L, HIGH);
+  duration = pulseIn(ECHO_L, HIGH, 25000);
   cm = mstocm(duration);
   if (cm == 0) {
     cm = 999;
@@ -115,7 +115,7 @@ bool Is_RightClose() {
   delayMicroseconds(10);
   digitalWrite(TRIG_R, LOW);
 
-  duration = pulseIn(ECHO_R, HIGH);
+  duration = pulseIn(ECHO_R, HIGH, 25000);
   cm = mstocm(duration);
   if (cm == 0) {
     cm = 999;
