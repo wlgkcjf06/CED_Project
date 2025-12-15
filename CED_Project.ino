@@ -35,11 +35,6 @@ int board_location = 0;
 #define EN2 3
 #define EN3 4
 #define EN4 2
-#define LED 1
-#define TRIG_L 10
-#define ECHO_L 11
-#define TRIG_R 12
-#define ECHO_R 13
 
 SoftwareSerial bt_serial (8,9);
 
@@ -54,13 +49,7 @@ void setup() {
   pinMode(TRIG_L, OUTPUT);
   pinMode(TRIG_R, OUTPUT);
   pinMode(LED, OUTPUT);
-
-  pinMode(LED, OUTPUT);
-  pinMode(TRIG_L, OUTPUT);
-  pinMode(TRIG_R, OUTPUT);
-  pinMode(ECHO_L, INPUT);
-  pinMode(ECHO_R, INPUT);
-
+  
   pinMode(LT_MODULE_L, INPUT);
   pinMode(LT_MODULE_F, INPUT);
   pinMode(LT_MODULE_R, INPUT);
@@ -138,17 +127,16 @@ int Detect_Course() {
   bool ll = It_isLeft();
   bool ff = It_isFront();
   bool rr = It_isRight();
-  if (ll & ff & rr) {
+  if (ll && ff && rr) {
     return 1;
   } 
-  else if (!ll & !ff & !rr){
+  else if (!ll && !ff && !rr){
     return 2;
   }
   else {
     return 0;
   }
 }
-
 
 void Update_Phase1() {
   bool ll = It_isLeft();
@@ -367,8 +355,4 @@ void loop() {
       g_direction = CAR_DIR_ST;
       break;
   }
-  else if (car_phase == 2) {
-    Update_Phase2();
-  }
-  Serial.println(g_direction);
 }
