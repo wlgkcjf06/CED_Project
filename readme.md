@@ -12,6 +12,6 @@
 * Dec. 09 : 게임판 탐지 알고리즘 작성
 * TODO: 경로 수정 및 실전 테스트
   
-## Milestone 3: 틱택토 최선의 수 도출
+## Milestone 3: 틱택토 최선의 수 도출 (완료)
 * Until 4th, December 2025 (Thu)
 * Dec. 15 : 틱택토 알고리즘 아두이노 탑재
