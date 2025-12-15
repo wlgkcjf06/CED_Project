@@ -1,5 +1,10 @@
 #include <LiquidCrystal_I2C.h>
 #include <SoftwareSerial.h>
+#include <string.h>
+
+#define BLACK 1  // JC -> 'X'
+#define WHITE 2  // Evil TA -> 'O'
+#define EMPTY 0  // Empty -> '.'
 
 #define CAR_DIR_RF 1
 #define CAR_DIR_ST 2
@@ -11,7 +16,7 @@
 #define LIGHT_THRESHOLD 300
 
 int g_direction = 0;
-int speed = 170;
+int speed = 200;
 int car_phase = 1;
 bool car_stop = false;
 String command = "";
@@ -39,9 +44,9 @@ bool Detected_Right = false;
 #define EN4 2
 
 SoftwareSerial bt_serial (8,9);
+LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 void setup() {
-  // put your setup code here, to run once:
   pinMode(ENA, OUTPUT);
   pinMode(ENB, OUTPUT);
   pinMode(EN1, OUTPUT);
@@ -59,35 +64,30 @@ void setup() {
   pinMode(ECHO_L, INPUT);
   pinMode(ECHO_R, INPUT);
 
-  Serial.begin(9600);
+  lcd.init();
+  lcd.backlight();
+
   bt_serial.begin(9600);
   digitalWrite(LED, LOW);
 }
 
 bool It_isLeft() {
   int ret = analogRead(LT_MODULE_L);
-  //Serial.print("left: ");
-  //Serial.println(ret);
   return(ret > BLACK_THRESHOLD) ? (true) : (false);
 }
 
 bool It_isFront() {
   int ret = analogRead(LT_MODULE_F);
-  //Serial.print("front: ");
-  //Serial.println(ret);
   return(ret > BLACK_THRESHOLD) ? (true) : (false);
 }
 
 bool It_isRight() {
   int ret = analogRead(LT_MODULE_R);
-  //Serial.print("right: ");
-  //Serial.println(ret);
   return(ret > BLACK_THRESHOLD) ? (true) : (false);
 }
 
 bool It_isDark() {
   int lum = analogRead(LIGHT_SENSOR);
-  //Serial.println(lum);
   return(lum > LIGHT_THRESHOLD) ? (true) : (false);
 }
 
@@ -120,8 +120,6 @@ bool Is_RightClose() {
   if (cm == 0) {
     cm = 999;
   }
-  Serial.print("Right:");
-  Serial.println(cm);
   return(cm < 30) ? (true) : (false);
 }
 
@@ -154,12 +152,10 @@ void Update_Phase1() {
       command.trim();
       if (command.equals("stop")) {
         car_stop = true;
-        Serial.println("Car Stopped");
         digitalWrite(LED, HIGH);
       }
       if (command.equals("start")) {
         car_stop = false;
-        Serial.println("Car Restarted");
         digitalWrite(LED, LOW);
         car_phase +=1;
       }
@@ -213,7 +209,8 @@ void Update_Phase2 (){
       car_phase+=1;
       board_location = 0;
     }
-    Detected_Left, Detected_Right = false, false;
+    Detected_Left = false;
+    Detected_Right = false;
   }
 }
 
@@ -257,10 +254,159 @@ void Update_Phase4() {
   }
 }
 
+void Receive_Hostile_Board_Info() {
+  command = "";
+  while(bt_serial.available()) {
+    char c = (char) bt_serial.read();
+    if (c=='\n') {
+      command.trim();
+      for(int i = 0; i<command.length();i++){
+        board[command[i]-1] = 2;
+      }
+    }
+    command+=c;
+  }
+}
+
+void Receive_Friendly_Board_Info() {
+  command = "";
+  while(bt_serial.available()) {
+    char c = (char) bt_serial.read();
+    if (c=='\n') {
+      command.trim();
+      for(int i = 0; i<command.length();i++){
+        board[command[i]-1] = 1;
+      }
+    }
+    command+=c;
+  }
+}
+
+void Receive_Board_Info() {
+  while(bt_serial.available() == 0) {
+    delay(100);
+  }
+  while(bt_serial.available() > 0) {
+    char c = bt_serial.read();
+    if (c == 'X') {
+      Receive_Hostile_Board_Info();
+      break;
+    }
+    else if (c == 'Z') {
+      for (int i = 0; i < 9 ; i++) board[i] = 0;
+      Receive_Friendly_Board_Info();
+      Receive_Hostile_Board_Info();
+      break;
+    }
+  }
+}
+
+// Helper: Check a specific line. Returns index of empty spot if it's a winning or blocking line .
+int check_line(int board[], int player, int a, int b, int c) {
+    int p_count = 0;
+    int e_count = 0;
+    int empty_index = -1;
+
+    if (board[a] == player) p_count++; else if (board[a] == EMPTY) { e_count++; empty_index = a; }
+    if (board[b] == player) p_count++; else if (board[b] == EMPTY) { e_count++; empty_index = b; }
+    if (board[c] == player) p_count++; else if (board[c] == EMPTY) { e_count++; empty_index = c; }
+
+    if (p_count == 2 && e_count == 1) return empty_index;
+    return -1;
+}
+
+// Helper: Scan all 8 lines for a critical move (Win or Block)
+int find_critical_move(int board[], int player) {
+    const int lines[8][3] = {
+        {0,1,2}, {3,4,5}, {6,7,8},
+        {0,3,6}, {1,4,7}, {2,5,8},
+        {0,4,8}, {2,4,6}
+    };
+
+    for (int i = 0; i < 8; i++) {
+        int move = check_line(board, player, lines[i][0], lines[i][1], lines[i][2]);
+        if (move != -1) return move;
+    }
+    return -1;
+}
+
+// New Helper: Count how many winning lines exist for a player
+int count_threats(int board[], int player) {
+    const int lines[8][3] = {
+        {0,1,2}, {3,4,5}, {6,7,8},
+        {0,3,6}, {1,4,7}, {2,5,8},
+        {0,4,8}, {2,4,6}
+    };
+    int threats = 0;
+    for (int i = 0; i < 8; i++) {
+        if (check_line(board, player, lines[i][0], lines[i][1], lines[i][2]) != -1) {
+            threats++;
+        }
+    }
+    return threats;
+}
+
+// New Helper: Find a move that creates a Fork (2 threats at once)
+int find_fork(int board[], int player) {
+    for (int i = 0; i < 9; i++) {
+        if (board[i] == EMPTY) {
+            // Simulate placing the piece
+            board[i] = player;
+            // Check if this creates >= 2 winning threats
+            if (count_threats(board, player) >= 2) {
+                board[i] = EMPTY; // Reset
+                return i;
+            }
+            board[i] = EMPTY; // Reset
+        }
+    }
+    return -1;
+}
+
+// MAIN LOGIC FUNCTION
+int get_optimal_move(int board[]) {
+    int move;
+
+    // 1. WIN
+    move = find_critical_move(board, BLACK);
+    if (move != -1) return move;
+
+    // 2. BLOCK
+    move = find_critical_move(board, WHITE);
+    if (move != -1) return move;
+
+    // 3. FORK (Attack!)
+    move = find_fork(board, BLACK);
+    if (move != -1) return move;
+
+    // 4. CENTER
+    if (board[4] == EMPTY) return 4;
+
+    // 5. CORNER
+    if (board[0] == EMPTY) return 0;
+    if (board[2] == EMPTY) return 2;
+    if (board[6] == EMPTY) return 6;
+    if (board[8] == EMPTY) return 8;
+
+    // 6. SIDE
+    if (board[1] == EMPTY) return 1;
+    if (board[3] == EMPTY) return 3;
+    if (board[5] == EMPTY) return 5;
+    if (board[7] == EMPTY) return 7;
+
+    return -1;
+}
+
+void Display_Optimal_Move() {
+  int move = get_optimal_move(board);
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("Optimal Move: ")
+  lcd.setCursor(14, 0);
+  lcd.print(move);
+}
+
 void car_update() {
-  // put your main code here, to run repeatedly:
-  //Serial.print("Car Update: ");
-  //Serial.println(g_direction);
   if(g_direction == CAR_DIR_FW){
     digitalWrite(EN1, LOW);
     digitalWrite(EN2, HIGH);
@@ -316,6 +462,8 @@ void car_update() {
   }
   else if (g_direction == CAR_DIR_TA) {
     bool ff = It_isFront();
+    bool rr = It_isRight();
+    bool ll = It_isLeft();
     while(!ff){
       digitalWrite(EN1, LOW);
       digitalWrite(EN2, HIGH);
@@ -323,6 +471,11 @@ void car_update() {
       digitalWrite(EN4, LOW);
       analogWrite(ENA, speed);
       analogWrite(ENB, speed);
+      if(rr || ll) {
+        break;
+      }
+      ll = It_isLeft();
+      rr = It_isRight();
       ff = It_isFront();
     }    
   }
@@ -348,7 +501,9 @@ void loop() {
       Update_Phase4();
       break;
     case 5:
-      //Insert Tic-Tac-Toe Code Here
+      Receive_Board_Info();
+      Display_Optimal_Move();
+      delay(90000);
       break;
     default:
       g_direction = CAR_DIR_ST;
