@@ -5,7 +5,7 @@
 * Nov. 18 : LFS Test
 * Nov. 20 : LFS 테스트 실패, Bluetooth, 암막정지 테스트 성공
 * Dec. 15 : LFS 검증 일단 성공
-* TODO : 자잘한 버그 고치기
+* TODO : 자잘한 버그 고치기, 새 배터리 준비하기
 
 ## Milestone 2: 게임판 탐지
 * Until 2nd, December 2025 (Tue)
