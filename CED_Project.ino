@@ -18,6 +18,8 @@ String command = "";
 byte buffer[10];
 int board [9] = {0,};
 int board_location = 0;
+bool Detected_Left = false;
+bool Detected_Right = false;
 
 #define LIGHT_SENSOR A3
 #define LT_MODULE_L A2
@@ -127,10 +129,10 @@ int Detect_Course() {
   bool ll = It_isLeft();
   bool ff = It_isFront();
   bool rr = It_isRight();
-  if (ll & ff & rr) {
+  if (ll && ff && rr) {
     return 1;
   } 
-  else if (!ll & !ff & !rr){
+  else if (!ll && !ff && !rr){
     return 2;
   }
   else {
@@ -187,8 +189,6 @@ void Update_Phase1() {
 
 void Update_Phase2 (){
   int co = Detect_Course();
-  bool Detected_Left = false;
-  bool Detected_Right = false;
   if(co == 0) {
     bool lo = Is_LeftClose();
     bool ro = Is_RightClose();
@@ -238,7 +238,6 @@ void Update_Phase3() {
 
 void Update_Phase4() {
   int co = Detect_Course();
-  bool Detected_Left = false;
   if(co == 0) {
     bool lo = Is_LeftClose();
     g_direction = CAR_DIR_FW;
