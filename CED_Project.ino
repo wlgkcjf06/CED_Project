@@ -263,6 +263,7 @@ void Receive_Hostile_Board_Info() {
       for(int i = 0; i<command.length();i++){
         board[command[i]-1] = 2;
       }
+      break;
     }
     command+=c;
   }
@@ -277,6 +278,7 @@ void Receive_Friendly_Board_Info() {
       for(int i = 0; i<command.length();i++){
         board[command[i]-1] = 1;
       }
+      break;
     }
     command+=c;
   }
@@ -401,7 +403,7 @@ void Display_Optimal_Move() {
   int move = get_optimal_move(board);
   lcd.clear();
   lcd.setCursor(0,0);
-  lcd.print("Optimal Move: ")
+  lcd.print("Optimal Move: ");
   lcd.setCursor(14, 0);
   lcd.print(move);
 }
@@ -443,8 +445,6 @@ void car_update() {
     analogWrite(ENB, speed);
     delay(TURN_DELAY);
     bool ff = It_isFront();
-    bool ll = It_isLeft();
-    bool rr = It_isRight();
     while(!ff){
       digitalWrite(EN1, LOW);
       digitalWrite(EN2, HIGH);
@@ -453,11 +453,6 @@ void car_update() {
       analogWrite(ENA, speed);
       analogWrite(ENB, speed);
       ff = It_isFront();
-      ll = It_isLeft();
-      rr = It_isRight();
-      if (ll || rr) {
-        break;
-      }
     }
   }
   else if (g_direction == CAR_DIR_TA) {
