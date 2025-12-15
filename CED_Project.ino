@@ -192,9 +192,6 @@ void Update_Phase1() {
   else {
     g_direction = CAR_DIR_TA;
   }
-  else{
-    g_direction = CAR_DIR_FW;
-  }
 }
 
 void Update_Phase2 (){
