@@ -151,6 +151,9 @@ int Detect_Course() {
 
 
 void Update_Phase1() {
+  bool ll = It_isLeft();
+  bool ff = It_isFront();
+  bool rr = It_isRight();
   bool dar = It_isDark();
   if (bt_serial.available()) {
     char data = (char) bt_serial.read();
