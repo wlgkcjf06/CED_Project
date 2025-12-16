@@ -11,6 +11,8 @@
 #define CAR_DIR_LF 3
 #define CAR_DIR_FW 4
 #define CAR_DIR_TA 5
+#define CAR_DIR_LC 6
+#define CAR_DIR_RC 7
 #define TURN_DELAY 100
 #define BLACK_THRESHOLD 150
 #define LIGHT_THRESHOLD 300
@@ -128,12 +130,23 @@ int Detect_Course() {
   bool ff = It_isFront();
   bool rr = It_isRight();
   if (ll && ff && rr) {
+    g_direction = CAR_DIR_FW;
     return 1;
   } 
   else if (!ll && !ff && !rr){
+    g_direction = CAR_DIR_TA;
     return 2;
   }
+  else if (ll && !ff && !rr){
+    g_direction = CAR_DIR_LC;
+    return 0;
+  }
+  else if (!ll && !ff & rr){
+    g_direction = CAR_DIR_RC;
+    return 0;
+  }
   else {
+    g_direction = CAR_DIR_FW;
     return 0;
   }
 }
@@ -188,7 +201,6 @@ void Update_Phase2 (){
   if(co == 0) {
     bool lo = Is_LeftClose();
     bool ro = Is_RightClose();
-    g_direction = CAR_DIR_FW;
     if (lo == true) {
       Detected_Left = true;
     }
@@ -205,7 +217,6 @@ void Update_Phase2 (){
     }
     board_location +=1;
     if(co == 2) {
-      g_direction = CAR_DIR_TA;
       car_phase+=1;
       board_location = 0;
     }
@@ -254,33 +265,43 @@ void Update_Phase4() {
   }
 }
 
-void Receive_Hostile_Board_Info() {
-  command = "";
-  while(bt_serial.available()) {
-    char c = (char) bt_serial.read();
-    if (c=='\n') {
-      command.trim();
-      for(int i = 0; i<command.length();i++){
-        board[command[i]-1] = 2;
-      }
-      break;
+void Display_Board() {
+  String output = "";
+  for (int i = 0; i < 9 ; i++) {
+    if (board[i] == 1) {
+      output += String(i+1);
+      output += " ";
     }
-    command+=c;
   }
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print(output);
 }
 
-void Receive_Friendly_Board_Info() {
-  command = "";
-  while(bt_serial.available()) {
-    char c = (char) bt_serial.read();
-    if (c=='\n') {
-      command.trim();
-      for(int i = 0; i<command.length();i++){
-        board[command[i]-1] = 1;
-      }
-      break;
+void Interpret_Command (String cmd) {
+  String friendly;
+  String hostile;
+  if (cmd[0] == 'X') {
+    cmd = cmd.substring(2);
+    for (int i = 0 ; i < cmd.length() ; i++) {
+      int pos = hostile[i] - '1';
+      board[pos] = 2;
     }
-    command+=c;
+  }
+  else if (cmd[0] == 'Z') {
+    for (int i = 0 ; i < 9 ; i++) board[i] = 0;
+    cmd = cmd.substring(2);
+    int index = cmd.indexOf(' ');
+    hostile = cmd.substring(0, index);
+    friendly = cmd.substring(index+1);
+    for (int i = 0 ; i < hostile.length() ; i++) {
+      int pos = hostile[i] - '1';
+      board[pos] = 2;
+    }
+    for (int i = 0 ; i < friendly.length() ; i++) {
+      int pos = friendly[i] - '1';
+      board[pos] = 1;
+    }
   }
 }
 
@@ -289,16 +310,12 @@ void Receive_Board_Info() {
     delay(100);
   }
   while(bt_serial.available() > 0) {
-    char c = bt_serial.read();
-    if (c == 'X') {
-      Receive_Hostile_Board_Info();
-      break;
-    }
-    else if (c == 'Z') {
-      for (int i = 0; i < 9 ; i++) board[i] = 0;
-      Receive_Friendly_Board_Info();
-      Receive_Hostile_Board_Info();
-      break;
+    char c = (char) bt_serial.read();
+    command += c;
+    if (c == '\n') {
+      command.trim();
+      Interpret_Command(command);
+      command = "";
     }
   }
 }
@@ -405,7 +422,8 @@ void Display_Optimal_Move() {
   lcd.setCursor(0,0);
   lcd.print("Optimal Move: ");
   lcd.setCursor(14, 0);
-  lcd.print(move);
+  lcd.print(move+1);
+  car_phase+=1;
 }
 
 void car_update() {
@@ -424,7 +442,6 @@ void car_update() {
     digitalWrite(EN4, HIGH);
     analogWrite(ENA, speed);
     analogWrite(ENB, speed);
-    delay(TURN_DELAY);
     bool ff = It_isFront();
     while(!ff){
       digitalWrite(EN1, HIGH);
@@ -443,7 +460,6 @@ void car_update() {
     digitalWrite(EN4, LOW);
     analogWrite(ENA, speed);
     analogWrite(ENB, speed);
-    delay(TURN_DELAY);
     bool ff = It_isFront();
     while(!ff){
       digitalWrite(EN1, LOW);
@@ -474,6 +490,22 @@ void car_update() {
       ff = It_isFront();
     }    
   }
+  else if (g_direction == CAR_DIR_LC) {
+    digitalWrite(EN1, LOW);
+    digitalWrite(EN2, HIGH);
+    digitalWrite(EN3, HIGH);
+    digitalWrite(EN4, LOW);
+    analogWrite(ENA, speed);
+    analogWrite(ENB, speed);
+  }
+  else if (g_direction == CAR_DIR_RC) {
+    digitalWrite(EN1, HIGH);
+    digitalWrite(EN2, LOW);
+    digitalWrite(EN3, LOW);
+    digitalWrite(EN4, HIGH);
+    analogWrite(ENA, speed);
+    analogWrite(ENB, speed);
+  }
   else{
     analogWrite(ENA, 0);
     analogWrite(ENB, 0);
@@ -498,7 +530,6 @@ void loop() {
     case 5:
       Receive_Board_Info();
       Display_Optimal_Move();
-      delay(90000);
       break;
     default:
       g_direction = CAR_DIR_ST;
