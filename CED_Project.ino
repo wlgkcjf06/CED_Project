@@ -13,20 +13,10 @@
 #define CAR_DIR_TA 5
 #define CAR_DIR_LC 6
 #define CAR_DIR_RC 7
-#define TURN_DELAY 100
+#define TURN_DELAY 250
 #define BLACK_THRESHOLD 150
 #define LIGHT_THRESHOLD 300
-
-int g_direction = 0;
-int speed = 200;
-int car_phase = 1;
-bool car_stop = false;
-String command = "";
-byte buffer[10];
-int board [9] = {0,};
-int board_location = 0;
-bool Detected_Left = false;
-bool Detected_Right = false;
+#define ULTRASONIC_TIMEOUT 5000
 
 #define LIGHT_SENSOR A3
 #define LT_MODULE_L A2
@@ -44,6 +34,39 @@ bool Detected_Right = false;
 #define EN2 3
 #define EN3 4
 #define EN4 2
+
+#define SPEED_HI_R 198
+#define SPEED_LOW_R 110
+#define SPEED_HI_L 180
+#define SPEED_LOW_L 100
+
+#define OFF_TIME_MS 50  
+#define ON_TIME_MS 400
+
+#define P3_MINIMUM_DELTA 300
+
+bool phase_lock = false;
+unsigned long phase_lock_start = 0;
+
+unsigned long OffStart = 0;
+bool OffStable = false;
+unsigned long OnStart = 0;
+bool OnStable = false;
+
+int g_direction = 0;
+int speed_l = SPEED_LOW_L;
+int speed_r = SPEED_LOW_R;
+int car_phase = 1;
+bool car_stop = false;
+String command = "";
+byte buffer[10];
+int board [9] = {0};
+int board_location = 0;
+bool Detected_Left = false;
+bool Detected_Right = false;
+int p2i = 0;
+int p3i = 0;
+int p4i = 0;
 
 SoftwareSerial bt_serial (8,9);
 LiquidCrystal_I2C lcd(0x27, 16, 2);
@@ -97,13 +120,61 @@ long mstocm (long microseconds) {
   return microseconds / 29 / 2;
 }
 
+void ResetLineTimers() {
+  OffStart = 0;
+  OffStable = false;
+  OnStart = 0;
+  OnStable = false;
+}
+
+bool OffTimeDelay(bool signal) {
+  unsigned long now = millis();
+
+  if (!signal) {
+    if (OffStart == 0) {
+      OffStart = now;
+      OffStable = false;
+    }
+    if (now - OffStart >= OFF_TIME_MS) {
+      OffStable = true;
+    }
+  } 
+  else {
+    OffStart = 0;
+    OffStable = false;
+  }
+  return OffStable;
+}
+
+bool OnTimeDelay(bool signal) {
+  unsigned long now = millis();
+
+  if(signal) {
+    if (OnStart == 0) {
+      OnStart = now;
+      OnStable = true;
+    }
+    else if (now - OnStart <= ON_TIME_MS) {
+      OnStable = false;
+    }
+    else {
+      OnStart = 0;
+      OnStable = true;
+    }
+  }
+  else {
+    OnStable = false;
+  }
+  return OnStable;
+}
+
 bool Is_LeftClose() {
   long duration, cm;
   digitalWrite(TRIG_L, HIGH);
   delayMicroseconds(10);
   digitalWrite(TRIG_L, LOW);
 
-  duration = pulseIn(ECHO_L, HIGH, 25000);
+  duration = pulseIn(ECHO_L, HIGH, 2500);
   cm = mstocm(duration);
   if (cm == 0) {
     cm = 999;
@@ -117,7 +188,7 @@ bool Is_RightClose() {
   delayMicroseconds(10);
   digitalWrite(TRIG_R, LOW);
 
-  duration = pulseIn(ECHO_R, HIGH, 25000);
+  duration = pulseIn(ECHO_R, HIGH, 2500);
   cm = mstocm(duration);
   if (cm == 0) {
     cm = 999;
@@ -126,22 +197,26 @@ bool Is_RightClose() {
 }
 
 int Detect_Course() {
+  //String output = "";
   bool ll = It_isLeft();
   bool ff = It_isFront();
   bool rr = It_isRight();
-  if (ll && ff && rr) {
+  //output = output + ll + "/" + ff + "/" + rr;
+  //bt_serial.println(output);
+  if (OnTimeDelay(ll && ff && rr)) {
     g_direction = CAR_DIR_FW;
+    bt_serial.println("Intersection Detected");
     return 1;
   } 
-  else if (!ll && !ff && !rr){
-    g_direction = CAR_DIR_TA;
+  else if (!ll && !rr && OffTimeDelay(ff)){
+    bt_serial.println("Reached DEAD END");
     return 2;
   }
   else if (ll && !ff && !rr){
     g_direction = CAR_DIR_LC;
     return 0;
   }
-  else if (!ll && !ff & rr){
+  else if (!ll && !ff && rr){
     g_direction = CAR_DIR_RC;
     return 0;
   }
@@ -191,14 +266,58 @@ void Update_Phase1() {
   else if (rr) {
     g_direction = CAR_DIR_RF;
   }
-  else {
+  else if (OffTimeDelay(ff)){
     g_direction = CAR_DIR_TA;
+  }
+  else{
+    g_direction = CAR_DIR_FW;
   }
 }
 
+void Check_Phase_Lock() {
+  unsigned long now = millis();
+  if (now - phase_lock_start > P3_MINIMUM_DELTA) {
+    phase_lock = false;
+  }
+}
+
+
 void Update_Phase2 (){
   int co = Detect_Course();
-  if(co == 0) {
+  Check_Phase_Lock();
+  if (co == 1 && (board_location == 0 || board_location == 1)){
+    if(Detected_Left == true && board_location < 3) {
+      board[8-board_location]+=1;
+      bt_serial.println("Detected Left");
+    }
+    if(Detected_Right == true && board_location < 3) {
+      board[5-board_location]+=1;
+      bt_serial.println("Detected Right");
+    }
+    board_location += 1;
+    if (board_location == 2) {
+      phase_lock_start = millis();
+      phase_lock = true;
+    }
+    Detected_Left = false;
+    Detected_Right = false;
+  }
+  else if (co == 2 && board_location == 2 && !phase_lock) {
+    if(Detected_Left == true && board_location < 3) {
+      board[board_location]+=1;
+      bt_serial.println("Detected Left");
+    }
+    bt_serial.println("Reached DEAD END");
+    Detected_Left = false;
+    Detected_Right = false;
+    g_direction = CAR_DIR_TA;
+    speed_r = SPEED_HI_R;
+    speed_l = SPEED_HI_L;
+    board_location = 0;
+    ResetLineTimers();
+    car_phase+=1;
+  }
+  else{
     bool lo = Is_LeftClose();
     bool ro = Is_RightClose();
     if (lo == true) {
@@ -208,29 +327,17 @@ void Update_Phase2 (){
       Detected_Right = true;
     }
   }
-  else{
-    if(Detected_Left == true) {
-      board[8-board_location]+=1;
-    }
-    if(Detected_Right == true) {
-      board[5-board_location]+=1;
-    }
-    board_location +=1;
-    if(co == 2) {
-      car_phase+=1;
-      board_location = 0;
-    }
-    Detected_Left = false;
-    Detected_Right = false;
-  }
 }
 
 void Update_Phase3() {
+  //String output = "";
   bool ll = It_isLeft();
   bool ff = It_isFront();
   bool rr = It_isRight();
+  //output = output + ll + "/" + ff + "/" + rr;
+  //bt_serial.println(output);
   if (ll) {
-    g_direction = CAR_DIR_LF;
+    g_direction = CAR_DIR_LF;    
   }
   else if (ff) {
     g_direction = CAR_DIR_FW;
@@ -238,32 +345,44 @@ void Update_Phase3() {
   else if (rr) {
     g_direction = CAR_DIR_RF;
   }
+  else if (!ll && !rr && OffTimeDelay(ff)) {
+    g_direction = CAR_DIR_TA;
+    ResetLineTimers();
+    car_phase+=1;
+  }
   else {
     g_direction = CAR_DIR_TA;
-    car_phase+=1;
   }
 }
 
 void Update_Phase4() {
   int co = Detect_Course();
-  if(co == 0) {
+  if (co == 1 && (board_location == 0 || board_location == 1)){
+    if(Detected_Left == true && board_location < 3) {
+      board[board_location]+=1;
+      bt_serial.println("Detected Left");
+    } 
+    board_location += 1;
+    Detected_Left = false;
+  }
+  else if (co == 2 && board_location == 2) {
+    if(Detected_Left == true && board_location < 3) {
+      board[board_location]+=1;
+      bt_serial.println("Detected Left");
+    }
+    Detected_Left = false;
+    g_direction = CAR_DIR_ST;
+    board_location = 0;
+    car_phase+=1;
+  }
+  else{
     bool lo = Is_LeftClose();
-    g_direction = CAR_DIR_FW;
     if (lo == true) {
       Detected_Left = true;
     }
   }
-  else{
-    if(Detected_Left == true) {
-      board[board_location]+=1;
-    }
-    board_location +=1;
-    if(co == 2) {
-      g_direction = CAR_DIR_ST;
-    }
-    Detected_Left = false;
-  }
 }
+
 
 void Display_Board() {
   String output = "";
@@ -285,7 +404,7 @@ void Interpret_Command (String cmd) {
     cmd = cmd.substring(2);
     for (int i = 0 ; i < cmd.length() ; i++) {
       int pos = hostile[i] - '1';
-      board[pos] = 2;
+      if (pos >=0 && pos < 9) board[pos] = 2;
     }
   }
   else if (cmd[0] == 'Z') {
@@ -296,11 +415,11 @@ void Interpret_Command (String cmd) {
     friendly = cmd.substring(index+1);
     for (int i = 0 ; i < hostile.length() ; i++) {
       int pos = hostile[i] - '1';
-      board[pos] = 2;
+      if (pos >=0 && pos < 9) board[pos] = 2;
     }
     for (int i = 0 ; i < friendly.length() ; i++) {
       int pos = friendly[i] - '1';
-      board[pos] = 1;
+      if (pos >=0 && pos < 9) board[pos] = 1;
     }
   }
 }
@@ -432,24 +551,26 @@ void car_update() {
     digitalWrite(EN2, HIGH);
     digitalWrite(EN3, LOW);
     digitalWrite(EN4, HIGH);
-    analogWrite(ENA, speed);
-    analogWrite(ENB, speed);
+    analogWrite(ENA, speed_r);
+    analogWrite(ENB, speed_l);
+    //bt_serial.println("Going Forward");
   }
   else if (g_direction == CAR_DIR_RF) {
     digitalWrite(EN1, HIGH);
     digitalWrite(EN2, LOW);
     digitalWrite(EN3, LOW);
     digitalWrite(EN4, HIGH);
-    analogWrite(ENA, speed);
-    analogWrite(ENB, speed);
+    analogWrite(ENA, speed_r);
+    analogWrite(ENB, speed_l);
+    bt_serial.println("Turning Right");
     bool ff = It_isFront();
     while(!ff){
       digitalWrite(EN1, HIGH);
       digitalWrite(EN2, LOW);
       digitalWrite(EN3, LOW);
       digitalWrite(EN4, HIGH);
-      analogWrite(ENA, speed);
-      analogWrite(ENB, speed);
+      analogWrite(ENA, SPEED_HI_R);
+      analogWrite(ENB, SPEED_HI_R);
       ff = It_isFront();
     }
   }
@@ -458,36 +579,39 @@ void car_update() {
     digitalWrite(EN2, HIGH);
     digitalWrite(EN3, HIGH);
     digitalWrite(EN4, LOW);
-    analogWrite(ENA, speed);
-    analogWrite(ENB, speed);
+    analogWrite(ENA, SPEED_HI_R);
+    analogWrite(ENB, SPEED_HI_L);
+    bt_serial.println("Turning Left");
     bool ff = It_isFront();
     while(!ff){
       digitalWrite(EN1, LOW);
       digitalWrite(EN2, HIGH);
       digitalWrite(EN3, HIGH);
       digitalWrite(EN4, LOW);
-      analogWrite(ENA, speed);
-      analogWrite(ENB, speed);
+      analogWrite(ENA, speed_r);
+      analogWrite(ENB, speed_l);
       ff = It_isFront();
     }
   }
   else if (g_direction == CAR_DIR_TA) {
+    bool ll = It_isLeft();
     bool ff = It_isFront();
     bool rr = It_isRight();
-    bool ll = It_isLeft();
+    bt_serial.println("Turning Around");
+    delay(TURN_DELAY);
     while(!ff){
       digitalWrite(EN1, LOW);
       digitalWrite(EN2, HIGH);
       digitalWrite(EN3, HIGH);
       digitalWrite(EN4, LOW);
-      analogWrite(ENA, speed);
-      analogWrite(ENB, speed);
+      analogWrite(ENA, SPEED_HI_R);
+      analogWrite(ENB, SPEED_HI_L);
       if(rr || ll) {
         break;
       }
       ll = It_isLeft();
-      rr = It_isRight();
       ff = It_isFront();
+      rr = It_isRight();
     }    
   }
   else if (g_direction == CAR_DIR_LC) {
@@ -495,16 +619,18 @@ void car_update() {
     digitalWrite(EN2, HIGH);
     digitalWrite(EN3, HIGH);
     digitalWrite(EN4, LOW);
-    analogWrite(ENA, speed);
-    analogWrite(ENB, speed);
+    analogWrite(ENA, speed_r);
+    analogWrite(ENB, speed_l);
+    //bt_serial.println("Correcting Left");
   }
   else if (g_direction == CAR_DIR_RC) {
     digitalWrite(EN1, HIGH);
     digitalWrite(EN2, LOW);
     digitalWrite(EN3, LOW);
     digitalWrite(EN4, HIGH);
-    analogWrite(ENA, speed);
-    analogWrite(ENB, speed);
+    analogWrite(ENA, speed_r);
+    analogWrite(ENB, speed_l);
+    //bt_serial.println("Correcting Right");
   }
   else{
     analogWrite(ENA, 0);
@@ -513,26 +639,48 @@ void car_update() {
 }
 
 void loop() {
-  car_update();
   switch(car_phase){
     case 1:
       Update_Phase1();
       break;
     case 2:
+      if(p2i == 0) {
+        speed_r = SPEED_LOW_R;
+        speed_l = SPEED_LOW_L;
+        bt_serial.println("In Phase 2");
+        p2i++;
+      }
       Update_Phase2();
+      /*if(p2i % 2 == 1) {
+        g_direction = CAR_DIR_ST;
+        delay(50);
+      }*/
       break;
     case 3:
+      if(p3i == 0) {
+        bt_serial.println("In Phase 3");
+        p3i++;
+      }
       Update_Phase3();
       break;
     case 4:
+      if(p4i == 0) {
+        bt_serial.println("In Phase 4");
+        p4i++;
+      }
+      /*
+      if(p4i % 2 == 1) {
+        g_direction = CAR_DIR_ST;
+        delay(50);
+      }*/
       Update_Phase4();
       break;
     case 5:
-      Receive_Board_Info();
-      Display_Optimal_Move();
+      Display_Board();
       break;
     default:
       g_direction = CAR_DIR_ST;
       break;
   }
+  car_update();
 }
