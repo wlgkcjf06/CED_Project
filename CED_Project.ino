@@ -13,9 +13,11 @@
 #define CAR_DIR_TA 5
 #define CAR_DIR_LC 6
 #define CAR_DIR_RC 7
-#define TURN_DELAY 100
+#define TURN_DELAY 200
 #define BLACK_THRESHOLD 150
 #define LIGHT_THRESHOLD 300
+#define HIGHSPEED 200
+#define LOWSPEED 100
 
 int g_direction = 0;
 int speed = 200;
@@ -425,8 +427,17 @@ void Display_Optimal_Move() {
   lcd.print(move+1);
   car_phase+=1;
 }
+void set_speed_by_direction() {
+  // High speed only for Left/Right turn and U-turn
+  if (g_direction == CAR_DIR_LF || g_direction == CAR_DIR_RF || g_direction == CAR_DIR_TA) {
+    speed = HIGHSPEED;
+  } else {
+    speed = LOWSPEED;
+  }
+}
 
 void car_update() {
+  set_speed_by_direction();
   if(g_direction == CAR_DIR_FW){
     digitalWrite(EN1, LOW);
     digitalWrite(EN2, HIGH);
